@@ -1,0 +1,32 @@
+---
+title: "Test"
+author: "Exercises"
+date: "8/1/2021"
+output: pdf_document
+---
+
+```{r Problem 1, echo=FALSE, include = FALSE}
+
+df = read.csv(file = "data/greenbuildings.csv")
+
+table(df$green_rating)
+hist(df$leasing_rate)
+
+df = df[df$leasing_rate > 10,]
+hist(df$leasing_rate)
+
+Monthly_Revenue = (df$Rent * df$size * (df$leasing_rate/100))
+df$Monthly_Revenue_in_Mil = Monthly_Revenue/1000000
+
+drops <- c("LEED","Energystar")
+df = df[ , !(names(df) %in% drops)]
+
+df$Rent_Diff = df$Rent - df$cluster_rent
+
+
+
+
+```
+
+
+
