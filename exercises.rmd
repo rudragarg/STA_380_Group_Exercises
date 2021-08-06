@@ -1,6 +1,6 @@
 ---
-title: "Test"
-author: "Exercises"
+title: "Exercises"
+author: "Jacob Pammer, Chandler Wann, Narain Mandyam, Rudraksh Garg"
 date: "8/1/2021"
 output: pdf_document
 ---
@@ -24,9 +24,66 @@ df = df[ , !(names(df) %in% drops)]
 df$Rent_Diff = df$Rent - df$cluster_rent
 
 
+df_green = df[df$green_rating == 1,]
+df_nongreen = df[df$green_rating == 0,]
+
+median(df_green$Rent)
+median(df_nongreen$Rent)
+
+median(df_green$Rent) - median(df_nongreen$Rent)
+
+IQR(df_green$Rent)
+IQR(df_nongreen$Rent)
+
+par(mfrow=c(1,2))
+
+d0 <- seq(0, 200, by=10)
+d1 <- seq(0, 200, by=10)
+lmts <- range(d0,d1)
+
+
+
+boxplot(df_green$Rent, col='green', ylim= lmts)
+
+boxplot(df_nongreen$Rent, ylim=lmts)
+
+
+
+wilcox.test(df_green$Rent, y = df_nongreen$Rent, alternative = c("greater"))
+
+
+
+
+
+```
+```{r Problem 1, echo=FALSE}
+plot(df$green_rating, df$age)
+
 
 
 ```
 
+ANSWER HERE::
+Do we aggree with conclusions?
+Certain portions of the analysis were done correctly, such as the use of medians is a good idea to avoid outliers.
+Additionally, the according to the wilcoxon test we found that the medians of green vs non-green buildings were statistically different. So,
+the green buildings could potentially be a strong indicator for rent price in the aggregate.
+However, the analyst did not account for certain cities being more green then others. Certain clusters will have higher rents regaurdless of green. Therefore,
+failing to take this into account could be undercutting your additionaly revenue. On top of that, in your payback period the analyst failed to consider the time value of money. 
+Instead of creating a straight line payback, the analyst should use a discounted payback period or NPV. This would determine the payoff period and addional cashflows more accurately. 
+It would be nice for comparison purposes if the clusters were correlated to certain cities. 
+(bar plot could comparing npv vs non npv adjustment)
+Then find a good scatter plot comparing stuff and discuss this as confounding
+Even though there are many flaws in this study, choosing a green building could be a viable option, but further
+analysis that address our confounding variables would be needed to be sure.
 
 
+
+
+```{r Problem 1, echo = False}
+#names(df)
+#median(df$leasing_rate)
+plot(df$green_rating, df$cluster_rent) 
+
+
+```
