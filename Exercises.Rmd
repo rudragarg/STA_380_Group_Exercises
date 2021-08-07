@@ -1,0 +1,59 @@
+---
+title: "Exercises"
+author: "Jacob Pammer, Chandler Wann, Narain Mandyam, Rudraksh Garg"
+date: "8/7/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1: Visual story telling part 1: green buildings
+
+To start, removing records with less than a 10% leasing rate makes sense. The histogram below, shows that these records seem to be special cases that have values far less than the average. Additionally, her theory that these low vacancy places have something wrong with them seems legitimate. Since, this will be a new building, we should assume that it will not have any of these problems.
+
+```{r Problem 1 1, echo=FALSE}
+df = read.csv(file = "data/greenbuildings.csv")
+hist(df$leasing_rate, main = 'Leasing Rate Histogram',xlab = 'Leasing Rate')
+df = df[df$leasing_rate > 10,]
+
+```
+Certain portions of the Guru's analysis were done correctly. For example, the use of medians is a good idea to avoid outliers. However, the analyst failed to account for potential variation in rent prices. As you can see in the side by side plots below, green rating's IQR and non-green rating's IQR cross through the same variable. So a range of estimates would be necessary to estimate a change in profits created by building a green complex.
+
+```{r Problem 1 2, echo=FALSE}
+Monthly_Revenue = (df$Rent * df$size * (df$leasing_rate/100))
+df$Monthly_Revenue_in_Mil = Monthly_Revenue/1000000
+drops <- c("LEED","Energystar")
+df = df[ , !(names(df) %in% drops)]
+df$Rent_Diff = df$Rent - df$cluster_rent
+df_green = df[df$green_rating == 1,]
+df_nongreen = df[df$green_rating == 0,]
+par(mfrow=c(1,2))
+d0 <- seq(0, 200, by=10)
+d1 <- seq(0, 200, by=10)
+lmts <- range(d0,d1)
+boxplot(df_green$Rent, col='green', ylim= lmts, main = 'Green Rating Rent')
+boxplot(df_nongreen$Rent, ylim=lmts, main = 'Non-green Rating Rent')
+```
+
+Additionally, the analyst did not account for certain cities being more green then others. Certain clusters will have higher rents regardless of green. Therefore, failing to take this into account could be undercutting additional revenue.
+Another flaw in her analysis is she failed to account for the future value of the additional expense incurred to make the building green. As shown below the future value of 5 million dollars in 8 years is in the 7 millions. This certainly should be accounted for when analyzing the potential consequences of a green building.
+
+```{r Problem 1 3, echo=FALSE}
+par(mfrow=c(1,2))
+barplot(5 * (1+.05)^8, main = 'Future Value of 5 Million Dollars', ylab = '$ in Millions')
+barplot(5, main = '5 Million Dollars', ylab = '$ in Millions')
+```
+
+A potential confounding variable is the age of the complex. Since green technology is rather new, it makes sense to remove the non-green rentals whose age are greater than that of the max age of the green buildings. The plot below shows that this value is at about 100 years old.
+
+```{r Problem 1 4, echo=FALSE}
+par(mfrow=c(1,1))
+plot(df$green_rating, df$age, ylab = 'Age',xlab = 'green_rating',main = 'Age vs Green Rating')
+
+```
+
+
+Even though there are many flaws in this study, choosing a green building could be a viable option, but further
+analysis that address our issues and confounding variables would be needed to be ensure that going green is a good decision.
