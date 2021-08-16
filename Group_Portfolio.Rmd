@@ -279,7 +279,7 @@ dev.off()
 ```
 
 ## Conclusion
-
+ 
 These three portfolios, weighted based on different years of returns, create different risk and reward deviations. Although they are similar, the weighting is varied for each ETF. ETFs are diversified in nature, therefore diversifying in ETFs should not make one's portfolio any safer.
 
 However, examining the 1 yr profit distribution we see a slight slant to the positive side. Perhaps indicating that certain investments have become popular as of late. This method beat the straighline weighting process; so did the 3yr and the 5yr.
