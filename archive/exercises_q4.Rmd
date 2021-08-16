@@ -1,0 +1,71 @@
+---
+title: "social_marketing problem"
+author: "Narain Mandyam"
+date: "8/15/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this problem, lets look at the social_marketing dataset, and try to discover any insights. 
+
+```{r imports, echo = FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r part1, echo = FALSE, include=FALSE}
+
+
+social_marketing =read.csv('data/social_marketing.csv')
+
+df <- social_marketing
+
+```
+
+First, lets create a "category" column, that will put each user into a category based on the max number of tweets they have in a particular category: 
+
+```{r part2, echo = FALSE, warning=FALSE}
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+#ggplot(counts, y = n, x = Category)
+
+
+# df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+
+```
+
+after doing this, we can see that the number one category, by a long shot, is chatter. This category is not really useful for understanding the market, as there are active users who could fall into many different spheres of twitter, so lets remove this category, and run the analysis again. 
+
+```{r part3, echo = FALSE, warning=FALSE}
+df <- social_marketing[,-2]
+
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+#ggplot(counts, y = n, x = Category)
+
+
+# df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+```
+
+As we can see, health_nutrition, photo-sharing, and cooking are the to categories of these engaged users. This makes sense, as health_nutrition is a core value of VitaminWat... erm I mean NutrientH20's brand. One insight that NutrientH20 could take away is to start a photosharing campaign, that might engage their users who alraedy love to photo share. Another insight could be to advertise on the cooking channel, or target audiences in the cooking social-media verse. 
+
+
