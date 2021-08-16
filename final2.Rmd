@@ -1,0 +1,98 @@
+---
+title: "Final"
+author: "Jacob"
+date: "8/15/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 2
+
+```{r cars, echo=FALSE,message=FALSE,include=FALSE}
+library(ggplot2)
+library('usmap')
+library(gridExtra)
+library(viridis)
+ABIA = read.csv('ABIA.csv')
+Airports = read.csv('airports.csv')
+
+```
+
+
+
+```{r commondest, echo=FALSE, message=FALSE,warning=FALSE}
+#Creating locational and airport codes across all airports
+Latitude = Airports[5]
+Longitude = Airports[6]
+Codes = Airports[14]
+#Putting new locational points to the Austin air data frame.
+AirCodes = cbind(Latitude,Longitude,Codes)
+Departure = ABIA[ABIA$Origin == 'AUS',]
+Arrival = ABIA[ABIA$Origin != 'AUS',]
+fullArrival = merge(Arrival,AirCodes,by.x = 'Origin',by.y = 'iata_code')
+fullDeparture = merge(Departure,AirCodes,by.x = 'Dest',by.y = 'iata_code')
+departureLatLong = cbind(fullDeparture$longitude_deg,fullArrival$latitude_deg)
+arrivalLatLong = cbind(fullArrival$longitude_deg,fullArrival$latitude_deg)
+#Using aggregate function to count observations that have a common origin point. I used year as the first parameter for a place holder because I knew there were no empty values and I was not sure how R would handle na observations.
+numberofArrivals = aggregate(fullArrival$Year, by = list(Origin = fullArrival$Origin), FUN = length)
+numberofDepartures = aggregate(fullDeparture$Year,by = list(Dest = fullDeparture$Dest),FUN = length)
+fullArrival = merge(fullArrival,numberofArrivals,by.x = 'Origin',by.y = 'Origin')
+fullDeparture = merge(fullDeparture,numberofDepartures,by.x = 'Dest',by.y = 'Dest')
+#Renaming newly created variable to Count
+names(fullArrival)[32]= 'Count'
+#Doing a similar process as above but to calculate the percentage of flights that were cancelled.
+fractionCancelled = aggregate(fullArrival$Cancelled,by = list(Origin = fullArrival$Origin),FUN = mean)
+fullArrival = merge(fullArrival,fractionCancelled,by.x = 'Origin',by.y = 'Origin')
+names(fullArrival)[33]= 'Fraction'
+# Setting up United States map for back drop.
+states = map_data('state')
+#Creating a gg plot with the desired title, backdrop, color and size.
+p = ggplot()+labs(title="Flights Arriving to Austin and Fraction of Cancellations")
+p = p+geom_polygon(data = states, aes(x=long,y=lat,group=group),colour = 'black',fill = 'white' )
+p = p + geom_jitter(data = fullArrival,aes(x = longitude_deg,y=latitude_deg,size = Count,col = Fraction)) +scale_color_viridis()
+  
+
+p
+```
+
+Above is a count of the origin locations of all the flights to Austin for the year 2021. As expected the most flights come from the Texas area. 
+
+
+```{r Weather cancelled, echo=FALSE,warning=FALSE}
+#Running a similar process to above. I chose max because that seemed to show the most interesting deviance in delay.
+
+AverageDelay = aggregate(fullArrival$WeatherDelay,by = list(Origin = fullArrival$Origin),na.rm = TRUE,FUN = max)
+fullArrivalw = merge(fullArrival,AverageDelay,by.x = 'Origin',by.y = 'Origin')
+names(fullArrivalw)[33]= 'MaxDelay'
+p3 = ggplot()+labs(title='Max Delay on Flights to Austin')
+p3 = p3+geom_polygon(data = states, aes(x=long,y=lat,group=group),colour = 'black',fill = 'white' )
+p3 = p3 + geom_jitter(data = fullArrivalw,aes(x = longitude_deg,y=latitude_deg,color = MaxDelay ))
+p3 = p3 + scale_color_viridis()
+p3
+
+```
+
+Above is the max delay for flights to Austin. It is interesting to note that Chicago had the largest delay.
+
+```{r scatters, echo=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+
+# Below I created plots that I thought were interesting. To do this I created several interacting plots and chose the ones that held important data.
+monthvsToAustin = aggregate(fullArrival$Year,by =list(Month = fullArrival$Month),FUN = length)
+plot(monthvsToAustin$Month,monthvsToAustin$x,xlab = 'Month',ylab = 'Flights to Austin',main = 'Flights to Austin vs Month of Year')
+
+
+plot(fullArrival$CarrierDelay,fullArrival$TaxiIn,xlab = 'Delay in Minutes',ylab = 'Taxi Time in Minutes',main = 'Delay vs Taxi Time')
+
+dayoWeekvsToAustin = aggregate(fullArrival$Year,by =list(Month = fullArrival$DayOfWeek),FUN = length)
+plot(dayoWeekvsToAustin$Month,dayoWeekvsToAustin$x,xlab = 'Day of Week',ylab = 'Flights to Austin',main = 'Flights to Austin vs  Day of Week')
+
+boxplot(fullDeparture$NASDelay,fullDeparture$CarrierDelay,fullDeparture$SecurityDelay,fullDeparture$LateAircraftDelay,outline = FALSE,names = c('NAS', 'Carrier','TSA', 'Plane'),xlab = 'Reason for Delay',ylab = 'Delay Time in Minutes',main = 'Reason for Delay vs Time of Delay')
+#To set up the next question I reset the frame.
+par(mfrow=c(1,1))
+```
+
+In the above plots we see lower flights to Austin in the months from September - December. We also see as delay increases, taxi time tends to decrease at a logarithmic rate. In the third plot we see that most days have the same amount of flights except for Saturday which is the value 6. In the last graph we see that the largest reason for delay comes from plane issues, followed by NAS which is delay due to weather adjusted for how the airport treats other weather issues.
