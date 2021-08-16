@@ -1,0 +1,457 @@
+---
+title: "Exercises"
+author: "Jacob Pammer, Chandler Wann, Narain Mandyam, Rudraksh Garg"
+date: "8/16/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1: Visual story telling part 1: green buildings
+
+To start, removing records with less than a 10% leasing rate makes sense. The histogram below, shows that these records seem to be special cases that have values far less than the average. Additionally, her theory that these low vacancy places have something wrong with them seems legitimate. Since, this will be a new building, we should assume that it will not have any of these problems.
+
+```{r Problem 1 1, echo=FALSE}
+# Reading in green data and creating a histogram of leasing rate.
+df = read.csv(file = "greenbuildings.csv")
+hist(df$leasing_rate, main = 'Leasing Rate Histogram',xlab = 'Leasing Rate')
+df = df[df$leasing_rate > 10,]
+
+```
+Certain portions of the Guru's analysis were done correctly. For example, the use of medians is a good idea to avoid outliers. However, the analyst failed to account for potential variation in rent prices. As you can see in the side by side plots below, green rating's IQR and non-green rating's IQR cross through the same variable. So a range of estimates would be necessary to estimate a change in profits created by building a green complex.
+
+```{r Problem 1 2, echo=FALSE}
+# Dopping energy ratings and creating a two data frames of green and non green.
+Monthly_Revenue = (df$Rent * df$size * (df$leasing_rate/100))
+df$Monthly_Revenue_in_Mil = Monthly_Revenue/1000000
+drops <- c("LEED","Energystar")
+df = df[ , !(names(df) %in% drops)]
+df$Rent_Diff = df$Rent - df$cluster_rent
+df_green = df[df$green_rating == 1,]
+df_nongreen = df[df$green_rating == 0,]
+par(mfrow=c(1,2))
+d0 <- seq(0, 200, by=10)
+d1 <- seq(0, 200, by=10)
+lmts <- range(d0,d1)
+boxplot(df_green$Rent, col='green', ylim= lmts, main = 'Green Rating Rent')
+boxplot(df_nongreen$Rent, ylim=lmts, main = 'Non-green Rating Rent')
+```
+
+Additionally, the analyst did not account for certain cities being more green then others. Certain clusters will have higher rents regardless of green. Therefore, failing to take this into account could be undercutting additional revenue.
+Another flaw in her analysis is she failed to account for the future value of the additional expense incurred to make the building green. As shown below the future value of 5 million dollars in 8 years is in the 7 millions. This certainly should be accounted for when analyzing the potential consequences of a green building.
+
+```{r Problem 1 3, echo=FALSE}
+# Bar plots accounting for expected value
+par(mfrow=c(1,2))
+barplot(5 * (1+.05)^8, main = 'Future Value of 5 Million Dollars', ylab = '$ in Millions')
+barplot(5, main = '5 Million Dollars', ylab = '$ in Millions',ylim = range(0,7))
+```
+
+A potential confounding variable is the age of the complex. Since green technology is rather new, it makes sense to remove the non-green rentals whose age are greater than that of the max age of the green buildings. The plot below shows that this value is at about 100 years old.
+
+```{r Problem 1 4, echo=FALSE}
+# Plotting green rating vs the age of the building
+par(mfrow=c(1,1))
+plot(df$green_rating, df$age, ylab = 'Age',xlab = 'green_rating',main = 'Age vs Green Rating')
+
+```
+
+
+Even though there are many flaws in this study, choosing a green building could be a viable option, but further
+analysis that address our issues and confounding variables would be needed to be ensure that going green is a good decision.
+
+
+# Question 2
+
+```{r cars, echo=FALSE,message=FALSE,include=FALSE}
+library(ggplot2)
+library('usmap')
+library(gridExtra)
+library(viridis)
+ABIA = read.csv('ABIA.csv')
+Airports = read.csv('airports.csv')
+
+```
+
+
+
+```{r commondest, echo=FALSE, message=FALSE,warning=FALSE}
+#Creating locational and airport codes across all airports
+Latitude = Airports[5]
+Longitude = Airports[6]
+Codes = Airports[14]
+#Putting new locational points to the Austin air data frame.
+AirCodes = cbind(Latitude,Longitude,Codes)
+Departure = ABIA[ABIA$Origin == 'AUS',]
+Arrival = ABIA[ABIA$Origin != 'AUS',]
+fullArrival = merge(Arrival,AirCodes,by.x = 'Origin',by.y = 'iata_code')
+fullDeparture = merge(Departure,AirCodes,by.x = 'Dest',by.y = 'iata_code')
+departureLatLong = cbind(fullDeparture$longitude_deg,fullArrival$latitude_deg)
+arrivalLatLong = cbind(fullArrival$longitude_deg,fullArrival$latitude_deg)
+#Using aggregate function to count observations that have a common origin point. I used year as the first parameter for a place holder because I knew there were no empty values and I was not sure how R would handle na observations.
+numberofArrivals = aggregate(fullArrival$Year, by = list(Origin = fullArrival$Origin), FUN = length)
+numberofDepartures = aggregate(fullDeparture$Year,by = list(Dest = fullDeparture$Dest),FUN = length)
+fullArrival = merge(fullArrival,numberofArrivals,by.x = 'Origin',by.y = 'Origin')
+fullDeparture = merge(fullDeparture,numberofDepartures,by.x = 'Dest',by.y = 'Dest')
+#Renaming newly created variable to Count
+names(fullArrival)[32]= 'Count'
+#Doing a similar process as above but to calculate the percentage of flights that were cancelled.
+fractionCancelled = aggregate(fullArrival$Cancelled,by = list(Origin = fullArrival$Origin),FUN = mean)
+fullArrival = merge(fullArrival,fractionCancelled,by.x = 'Origin',by.y = 'Origin')
+names(fullArrival)[33]= 'Fraction'
+# Setting up United States map for back drop.
+states = map_data('state')
+#Creating a gg plot with the desired title, backdrop, color and size.
+p = ggplot()+labs(title="Flights Arriving to Austin and Fraction of Cancellations")
+p = p+geom_polygon(data = states, aes(x=long,y=lat,group=group),colour = 'black',fill = 'white' )
+p = p + geom_jitter(data = fullArrival,aes(x = longitude_deg,y=latitude_deg,size = Count,col = Fraction)) +scale_color_viridis()
+  
+
+p
+```
+
+Above is a count of the origin locations of all the flights to Austin for the year 2021. As expected the most flights come from the Texas area. 
+
+
+```{r Weather cancelled, echo=FALSE,warning=FALSE}
+#Running a similar process to above. I chose max because that seemed to show the most interesting deviance in delay.
+
+AverageDelay = aggregate(fullArrival$WeatherDelay,by = list(Origin = fullArrival$Origin),na.rm = TRUE,FUN = max)
+fullArrivalw = merge(fullArrival,AverageDelay,by.x = 'Origin',by.y = 'Origin')
+names(fullArrivalw)[33]= 'MaxDelay'
+p3 = ggplot()+labs(title='Max Delay on Flights to Austin')
+p3 = p3+geom_polygon(data = states, aes(x=long,y=lat,group=group),colour = 'black',fill = 'white' )
+p3 = p3 + geom_jitter(data = fullArrivalw,aes(x = longitude_deg,y=latitude_deg,color = MaxDelay ))
+p3 = p3 + scale_color_viridis()
+p3
+
+```
+
+Above is the max delay for flights to Austin. It is interesting to note that Chicago had the largest delay.
+
+```{r scatters, echo=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+
+# Below I created plots that I thought were interesting. To do this I created several interacting plots and chose the ones that held important data.
+monthvsToAustin = aggregate(fullArrival$Year,by =list(Month = fullArrival$Month),FUN = length)
+plot(monthvsToAustin$Month,monthvsToAustin$x,xlab = 'Month',ylab = 'Flights to Austin',main = 'Flights to Austin vs Month of Year')
+
+
+plot(fullArrival$CarrierDelay,fullArrival$TaxiIn,xlab = 'Delay in Minutes',ylab = 'Taxi Time in Minutes',main = 'Delay vs Taxi Time')
+
+dayoWeekvsToAustin = aggregate(fullArrival$Year,by =list(Month = fullArrival$DayOfWeek),FUN = length)
+plot(dayoWeekvsToAustin$Month,dayoWeekvsToAustin$x,xlab = 'Day of Week',ylab = 'Flights to Austin',main = 'Flights to Austin vs  Day of Week')
+
+boxplot(fullDeparture$NASDelay,fullDeparture$CarrierDelay,fullDeparture$SecurityDelay,fullDeparture$LateAircraftDelay,outline = FALSE,names = c('NAS', 'Carrier','TSA', 'Plane'),xlab = 'Reason for Delay',ylab = 'Delay Time in Minutes',main = 'Reason for Delay vs Time of Delay')
+#To set up the next question I reset the frame.
+par(mfrow=c(1,1))
+```
+
+In the above plots we see lower flights to Austin in the months from September - December. We also see as delay increases, taxi time tends to decrease at a logarithmic rate. In the third plot we see that most days have the same amount of flights except for Saturday which is the value 6. In the last graph we see that the largest reason for delay comes from plane issues, followed by NAS which is delay due to weather adjusted for how the airport treats other weather issues.
+
+# Question 3
+
+We selected 6 REIT ETFs to create a prediction portfolio. Modeling for the next 20 days, finding different weights was the goal. We looked at weightings based off of the 5yr, 3yr, and 1 yr returns for the portfolio. The goal was to find which of these portfolio weight combos would beat the straightline weight of each ETF. Each ETF did well in its own right, and certain did better than others based on the time frame used. 
+
+
+## ETFs
+ICF - iShares Cohen & Steers REIT ETF;
+USRT - iShares Core U.S. REIT ETF;
+VNQ - Vanguard Real Estate Index Fund ETF;
+SCHH - Schwab U.S. REIT ETF;
+IYR - iShares U.S. Real Estate ETF;
+RWR - SPDR Dow Jones REIT ETF;
+
+```{r , echo = FALSE, warning=FALSE, include = FALSE}
+library('quantmod')
+# Import REIT ETFs
+mystocks = c("ICF", "USRT", "VNQ", "SCHH", "IYR", "RWR")
+getSymbols(mystocks, from = "2016-08-16")
+# loop into adjusted close
+for(ticker in mystocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+# use close on close returns and create a matrix
+all_returns = cbind(	ClCl(ICFa),
+                     ClCl(USRTa),
+                     ClCl(VNQa),
+                     ClCl(SCHHa),
+                     ClCl(IYRa),
+                     ClCl(RWRa))
+all_returns = as.matrix(na.omit(all_returns))
+```
+
+```{r , echo = FALSE, warning=FALSE}
+pairs(all_returns)
+### These are highly correlated due to the fact that they are all etfs in the same industry, Real Estate. 
+```
+
+This pairwise plot demonstrates the relationships between each ETF. Clearly, they are all positively correlated. This is due to the ETFs being contained within the same industry, real estate. Real estate is a great way to hedge against inflation and diversify your overall portfolio; however it would be highly unusual for real estate to make up the entirety of your investments. 
+
+Total wealth after 20 days in all 6 ETFs, equally weighted.
+```{r , echo = FALSE, warning = FALSE, include=FALSE,fig.align='center'}
+library(mosaic)
+library(quantmod)
+library(foreach)
+# bootstrap for daily returns to see a distribtion of returns
+set.seed(657)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+###########  ICF    USRT  VNQ   SCHH  IYR RWR
+my_weights = c(1/6, 1/6, 1/6, 1/6, 1/6, 1/6)
+#weight each ETF
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+# Compute your new total wealth
+total_wealth = sum(holdings)
+total_wealth
+initial_wealth = 100000
+# boostrap / resample 5000 times
+sim = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  ### Allocated by last year's return 
+  ###########  ICF  USRT VNQ  SCHH  IYR   RWR 
+  weights = c(1/6, 1/6, 1/6, 1/6, 1/6, 1/6)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+```{r, echo=FALSE, warning=FALSE, fig.align='center'}
+#find the center of the profit distribution
+#plot it with qplot
+# Profit/loss
+#mean(sim[,n_days])
+#mean(sim[,n_days] - initial_wealth)
+#hist(sim[,n_days]- initial_wealth, breaks=30, lab = "Profit", main = "Profit Distribution")
+qplot(sim[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1067.41,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+#95% confidence interval or St error times 2
+# 5% value at risk:
+#quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+This is the Profit plot of the evenly weighted holdings of all 6 ETF REITs. This method gave a mean of $1,067. And a range from -$8,535 to $10,669.
+
+
+# Portfolio 1
+## Weighted based on 1yr returns
+```{r , echo = FALSE, warning = FALSE, include =FALSE}
+### Portfolio 1
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  ### Allocated by last year's return 
+  ###########  ICF  USRT VNQ  SCHH  IYR   RWR 
+  weights = c(0.25, 0.1, 0.15, 0.1, 0.05, 0.35)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+Representing the possible range of total wealth after 20 days in the market. 
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# histogram of total wealth
+hist(sim1[,n_days], 25, xlab = "Total Wealth", main = "Wealth Distribution" )
+```
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# Profit/loss
+#mean(sim1[,n_days])
+#mean(sim1[,n_days] - initial_wealth)
+#hist(sim1[,n_days]- initial_wealth, breaks=30, lab = "Profit", main = "Profit Distribution")
+qplot(sim1[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1067.41,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+This model demonstrates the total possible profit of this portfolio after 20 days in the market. 
+profit will remain between -$8,886 and +$11,063 with 95% confidence with the mean at $1,089. 
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+
+
+# Portfolio 2
+## Weighted based on 5yr returns
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+##########################
+#### Portfolio 2
+##########################
+set.seed(1234)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Allocated by best 5 yr returns
+total_wealth = 100000
+###########  ICF  USRT VNQ  SCHH  IYR  RWR
+weights = c(0.25, 0.15, 0.25, 0.0, 0.35, 0.0)
+initial_wealth = 100000
+sim2 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+hist(sim2[,n_days], 25, xlab = " Total Wealth", main = "Wealth Distribution")
+```
+The total wealth in the portfolio 2 based off of weighting on the 5yr return. 
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# Profit/loss
+#mean(sim2[,n_days])
+#mean(sim2[,n_days] - initial_wealth)
+#hist(sim2[,n_days]- initial_wealth, breaks=30,xlab = " Profit", main = "Profit Distribution")
+qplot(sim2[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1165.925,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+Profit range for portfolio 2 will remain between -$8,441 and +$10,773 with 95% confidence with a mean of $1,166.
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim2[,n_days]- initial_wealth, prob=0.05)
+```
+
+
+
+# Portfolio 3
+## Weighted based on 3yr returns
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+#########################
+#### Portfolio 3
+#########################
+set.seed(987)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+### weighted by there 3 year
+###########  ICF  USRT  VNQ   SCHH  IYR RWR
+weights = c(0.2, 0.15, 0.2, 0.1, 0.2, 0.15)
+initial_wealth = 100000
+sim3 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+hist(sim3[,n_days], 25,xlabel = " Total Wealth", main = "Wealth Distribution")
+```
+Wealth from portfolio 3 based off of the 3yr return.
+```{r , echo = FALSE, warning = FALSE, fig.align='center'}
+# Profit/loss
+#mean(sim3[,n_days])
+#mean(sim3[,n_days] - initial_wealth)
+#hist(sim3[,n_days]- initial_wealth, breaks= 30,xlab = " Profit", main = "Profit Distribution")
+qplot(sim3[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1088.1,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+
+Profit will remain between -$8,374 and +$10,551 with 95% confidence with a mean of $1,088. 
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim3[,n_days]- initial_wealth, prob=0.05)
+dev.off()
+```
+
+## Conclusion
+ 
+These three portfolios, weighted based on different years of returns, create different risk and reward deviations. Although they are similar, the weighting is varied for each ETF. ETFs are diversified in nature, therefore diversifying in ETFs should not make one's portfolio any safer.
+
+However, examining the 1 yr profit distribution we see a slight slant to the positive side. Perhaps indicating that certain investments have become popular as of late. This method beat the straighline weighting process; so did the 3yr and the 5yr.
+
+If one portfolio weight set had to be choosen then the 5yr return would have to be the winner. It shows consistent earnings over the long run and it has the highest mean ($1,166) for the distribution to center off of. The 5 yr matches both statistically and intuitively. This model also beat the mean of the straight line weighted model by about 10%.
+
+# Question 4
+
+In this problem, lets look at the social_marketing dataset, and try to discover any insights. 
+
+```{r part1, echo = FALSE}
+library(dplyr)
+library(ggplot2)
+
+social_marketing =read.csv('social_marketing.csv')
+df <- social_marketing
+
+```
+
+first, lets create a "category" column, that will put each user into a category based on the max number of tweets they have in a particular category: 
+
+```{r part2, echo = False}
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+ggplot(counts, y = n, x = Category)
+
+
+df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+
+```
+
+after doing this, we can see that the number one category, by a long shot, is chatter. This category is not really useful for understanding the market, as there are active users who could fall into many different spheres of twitter, so lets remove this category, and run the analysis again. 
+
+```{r part3, echo = FALSE}
+df <- social_marketing[,-2]
+
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+ggplot(counts, y = n, x = Category)
+
+
+df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+```
+
+As we can see, health_nutrition, photo-sharing, and cooking are the to categories of these engaged users. This makes sense, as health_nutrition is a core value of VitaminWat... erm I mean NutrientH20's brand. One insight that NutrientH20 could take away is to start a photosharing campaign, that might engage their users who alraedy love to photo share. Another insight could be to advertise on the cooking channel, or target audiences in the cooking social-media verse. 
+
+
