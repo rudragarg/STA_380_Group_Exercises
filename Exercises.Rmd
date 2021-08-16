@@ -1,7 +1,7 @@
 ---
 title: "Exercises"
 author: "Jacob Pammer, Chandler Wann, Narain Mandyam, Rudraksh Garg"
-date: "8/7/2021"
+date: "8/16/2021"
 output: pdf_document
 ---
 
@@ -150,3 +150,308 @@ par(mfrow=c(1,1))
 ```
 
 In the above plots we see lower flights to Austin in the months from September - December. We also see as delay increases, taxi time tends to decrease at a logarithmic rate. In the third plot we see that most days have the same amount of flights except for Saturday which is the value 6. In the last graph we see that the largest reason for delay comes from plane issues, followed by NAS which is delay due to weather adjusted for how the airport treats other weather issues.
+
+# Question 3
+
+We selected 6 REIT ETFs to create a prediction portfolio. Modeling for the next 20 days, finding different weights was the goal. We looked at weightings based off of the 5yr, 3yr, and 1 yr returns for the portfolio. The goal was to find which of these portfolio weight combos would beat the straightline weight of each ETF. Each ETF did well in its own right, and certain did better than others based on the time frame used. 
+
+
+## ETFs
+ICF - iShares Cohen & Steers REIT ETF;
+USRT - iShares Core U.S. REIT ETF;
+VNQ - Vanguard Real Estate Index Fund ETF;
+SCHH - Schwab U.S. REIT ETF;
+IYR - iShares U.S. Real Estate ETF;
+RWR - SPDR Dow Jones REIT ETF;
+
+```{r , echo = FALSE, warning=FALSE, include = FALSE}
+library('quantmod')
+# Import REIT ETFs
+mystocks = c("ICF", "USRT", "VNQ", "SCHH", "IYR", "RWR")
+getSymbols(mystocks, from = "2016-08-16")
+# loop into adjusted close
+for(ticker in mystocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+# use close on close returns and create a matrix
+all_returns = cbind(	ClCl(ICFa),
+                     ClCl(USRTa),
+                     ClCl(VNQa),
+                     ClCl(SCHHa),
+                     ClCl(IYRa),
+                     ClCl(RWRa))
+all_returns = as.matrix(na.omit(all_returns))
+```
+
+```{r , echo = FALSE, warning=FALSE}
+pairs(all_returns)
+### These are highly correlated due to the fact that they are all etfs in the same industry, Real Estate. 
+```
+
+This pairwise plot demonstrates the relationships between each ETF. Clearly, they are all positively correlated. This is due to the ETFs being contained within the same industry, real estate. Real estate is a great way to hedge against inflation and diversify your overall portfolio; however it would be highly unusual for real estate to make up the entirety of your investments. 
+
+Total wealth after 20 days in all 6 ETFs, equally weighted.
+```{r , echo = FALSE, warning = FALSE, include=FALSE,fig.align='center'}
+library(mosaic)
+library(quantmod)
+library(foreach)
+# bootstrap for daily returns to see a distribtion of returns
+set.seed(657)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+###########  ICF    USRT  VNQ   SCHH  IYR RWR
+my_weights = c(1/6, 1/6, 1/6, 1/6, 1/6, 1/6)
+#weight each ETF
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+# Compute your new total wealth
+total_wealth = sum(holdings)
+total_wealth
+initial_wealth = 100000
+# boostrap / resample 5000 times
+sim = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  ### Allocated by last year's return 
+  ###########  ICF  USRT VNQ  SCHH  IYR   RWR 
+  weights = c(1/6, 1/6, 1/6, 1/6, 1/6, 1/6)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+```{r, echo=FALSE, warning=FALSE, fig.align='center'}
+#find the center of the profit distribution
+#plot it with qplot
+# Profit/loss
+#mean(sim[,n_days])
+#mean(sim[,n_days] - initial_wealth)
+#hist(sim[,n_days]- initial_wealth, breaks=30, lab = "Profit", main = "Profit Distribution")
+qplot(sim[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1067.41,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+#95% confidence interval or St error times 2
+# 5% value at risk:
+#quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+This is the Profit plot of the evenly weighted holdings of all 6 ETF REITs. This method gave a mean of $1,067. And a range from -$8,535 to $10,669.
+
+
+# Portfolio 1
+## Weighted based on 1yr returns
+```{r , echo = FALSE, warning = FALSE, include =FALSE}
+### Portfolio 1
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  ### Allocated by last year's return 
+  ###########  ICF  USRT VNQ  SCHH  IYR   RWR 
+  weights = c(0.25, 0.1, 0.15, 0.1, 0.05, 0.35)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+Representing the possible range of total wealth after 20 days in the market. 
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# histogram of total wealth
+hist(sim1[,n_days], 25, xlab = "Total Wealth", main = "Wealth Distribution" )
+```
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# Profit/loss
+#mean(sim1[,n_days])
+#mean(sim1[,n_days] - initial_wealth)
+#hist(sim1[,n_days]- initial_wealth, breaks=30, lab = "Profit", main = "Profit Distribution")
+qplot(sim1[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1067.41,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+This model demonstrates the total possible profit of this portfolio after 20 days in the market. 
+profit will remain between -$8,886 and +$11,063 with 95% confidence with the mean at $1,089. 
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+
+
+# Portfolio 2
+## Weighted based on 5yr returns
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+##########################
+#### Portfolio 2
+##########################
+set.seed(1234)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Allocated by best 5 yr returns
+total_wealth = 100000
+###########  ICF  USRT VNQ  SCHH  IYR  RWR
+weights = c(0.25, 0.15, 0.25, 0.0, 0.35, 0.0)
+initial_wealth = 100000
+sim2 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+hist(sim2[,n_days], 25, xlab = " Total Wealth", main = "Wealth Distribution")
+```
+The total wealth in the portfolio 2 based off of weighting on the 5yr return. 
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# Profit/loss
+#mean(sim2[,n_days])
+#mean(sim2[,n_days] - initial_wealth)
+#hist(sim2[,n_days]- initial_wealth, breaks=30,xlab = " Profit", main = "Profit Distribution")
+qplot(sim2[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1165.925,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+Profit range for portfolio 2 will remain between -$8,441 and +$10,773 with 95% confidence with a mean of $1,166.
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim2[,n_days]- initial_wealth, prob=0.05)
+```
+
+
+
+# Portfolio 3
+## Weighted based on 3yr returns
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+#########################
+#### Portfolio 3
+#########################
+set.seed(987)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+### weighted by there 3 year
+###########  ICF  USRT  VNQ   SCHH  IYR RWR
+weights = c(0.2, 0.15, 0.2, 0.1, 0.2, 0.15)
+initial_wealth = 100000
+sim3 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+hist(sim3[,n_days], 25,xlabel = " Total Wealth", main = "Wealth Distribution")
+```
+Wealth from portfolio 3 based off of the 3yr return.
+```{r , echo = FALSE, warning = FALSE, fig.align='center'}
+# Profit/loss
+#mean(sim3[,n_days])
+#mean(sim3[,n_days] - initial_wealth)
+#hist(sim3[,n_days]- initial_wealth, breaks= 30,xlab = " Profit", main = "Profit Distribution")
+qplot(sim3[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1088.1,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+
+Profit will remain between -$8,374 and +$10,551 with 95% confidence with a mean of $1,088. 
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim3[,n_days]- initial_wealth, prob=0.05)
+dev.off()
+```
+
+## Conclusion
+ 
+These three portfolios, weighted based on different years of returns, create different risk and reward deviations. Although they are similar, the weighting is varied for each ETF. ETFs are diversified in nature, therefore diversifying in ETFs should not make one's portfolio any safer.
+
+However, examining the 1 yr profit distribution we see a slight slant to the positive side. Perhaps indicating that certain investments have become popular as of late. This method beat the straighline weighting process; so did the 3yr and the 5yr.
+
+If one portfolio weight set had to be choosen then the 5yr return would have to be the winner. It shows consistent earnings over the long run and it has the highest mean ($1,166) for the distribution to center off of. The 5 yr matches both statistically and intuitively. This model also beat the mean of the straight line weighted model by about 10%.
+
+# Question 4
+
+In this problem, lets look at the social_marketing dataset, and try to discover any insights. 
+
+```{r part1, echo = FALSE}
+library(dplyr)
+library(ggplot2)
+
+social_marketing =read.csv('social_marketing.csv')
+df <- social_marketing
+
+```
+
+first, lets create a "category" column, that will put each user into a category based on the max number of tweets they have in a particular category: 
+
+```{r part2, echo = False}
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+ggplot(counts, y = n, x = Category)
+
+
+df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+
+```
+
+after doing this, we can see that the number one category, by a long shot, is chatter. This category is not really useful for understanding the market, as there are active users who could fall into many different spheres of twitter, so lets remove this category, and run the analysis again. 
+
+```{r part3, echo = FALSE}
+df <- social_marketing[,-2]
+
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+ggplot(counts, y = n, x = Category)
+
+
+df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+```
+
+As we can see, health_nutrition, photo-sharing, and cooking are the to categories of these engaged users. This makes sense, as health_nutrition is a core value of VitaminWat... erm I mean NutrientH20's brand. One insight that NutrientH20 could take away is to start a photosharing campaign, that might engage their users who alraedy love to photo share. Another insight could be to advertise on the cooking channel, or target audiences in the cooking social-media verse. 
+
+
