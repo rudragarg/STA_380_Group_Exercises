@@ -1,0 +1,880 @@
+---
+title: "Exercises"
+author: "Jacob Pammer, Chandler Wann, Narain Mandyam, Rudraksh Garg"
+date: "8/16/2021"
+output: pdf_document
+---
+
+
+# Git Repo: https://github.com/rudragarg/STA_380_Group_Exercises
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Visual story telling part 1: green buildings
+
+To start, removing records with less than a 10% leasing rate makes sense. The histogram below, shows that these records seem to be special cases that have values far less than the average. Additionally, her theory that these low vacancy places have something wrong with them seems legitimate. Since, this will be a new building, we should assume that it will not have any of these problems.
+
+```{r Problem 1 1, echo=FALSE}
+# Reading in green data and creating a histogram of leasing rate.
+df = read.csv(file = "data/greenbuildings.csv")
+hist(df$leasing_rate, main = 'Leasing Rate Histogram',xlab = 'Leasing Rate')
+df = df[df$leasing_rate > 10,]
+
+```
+Certain portions of the Guru's analysis were done correctly. For example, the use of medians is a good idea to avoid outliers. However, the analyst failed to account for potential variation in rent prices. As you can see in the side by side plots below, green rating's IQR and non-green rating's IQR cross through the same variable. So a range of estimates would be necessary to estimate a change in profits created by building a green complex.
+
+```{r Problem 1 2, echo=FALSE}
+# Dopping energy ratings and creating a two data frames of green and non green.
+Monthly_Revenue = (df$Rent * df$size * (df$leasing_rate/100))
+df$Monthly_Revenue_in_Mil = Monthly_Revenue/1000000
+drops <- c("LEED","Energystar")
+df = df[ , !(names(df) %in% drops)]
+df$Rent_Diff = df$Rent - df$cluster_rent
+df_green = df[df$green_rating == 1,]
+df_nongreen = df[df$green_rating == 0,]
+par(mfrow=c(1,2))
+d0 <- seq(0, 200, by=10)
+d1 <- seq(0, 200, by=10)
+lmts <- range(d0,d1)
+boxplot(df_green$Rent, col='green', ylim= lmts, main = 'Green Rating Rent')
+boxplot(df_nongreen$Rent, ylim=lmts, main = 'Non-green Rating Rent')
+```
+
+Additionally, the analyst did not account for certain cities being more green then others. Certain clusters will have higher rents regardless of green. Therefore, failing to take this into account could be undercutting additional revenue.
+Another flaw in her analysis is she failed to account for the future value of the additional expense incurred to make the building green. As shown below the future value of 5 million dollars in 8 years is in the 7 millions. This certainly should be accounted for when analyzing the potential consequences of a green building.
+
+```{r Problem 1 3, echo=FALSE}
+# Bar plots accounting for expected value
+par(mfrow=c(1,2))
+barplot(5 * (1+.05)^8, main = 'Future Value of 5 Million Dollars', ylab = '$ in Millions')
+barplot(5, main = '5 Million Dollars', ylab = '$ in Millions',ylim = range(0,7))
+```
+
+A potential confounding variable is the age of the complex. Since green technology is rather new, it makes sense to remove the non-green rentals whose age are greater than that of the max age of the green buildings. The plot below shows that this value is at about 100 years old.
+
+```{r Problem 1 4, echo=FALSE}
+# Plotting green rating vs the age of the building
+par(mfrow=c(1,1))
+plot(df$green_rating, df$age, ylab = 'Age',xlab = 'green_rating',main = 'Age vs Green Rating')
+
+```
+
+
+Even though there are many flaws in this study, choosing a green building could be a viable option, but further
+analysis that address our issues and confounding variables would be needed to be ensure that going green is a good decision.
+
+
+# Visual story telling part 2: flights at ABIA
+
+```{r cars, echo=FALSE,message=FALSE,include=FALSE}
+library(ggplot2)
+library('usmap')
+library(gridExtra)
+library(viridis)
+ABIA = read.csv('data/ABIA.csv')
+Airports = read.csv('data/airports.csv')
+
+```
+
+
+
+```{r commondest, echo=FALSE, message=FALSE,warning=FALSE}
+#Creating locational and airport codes across all airports
+Latitude = Airports[5]
+Longitude = Airports[6]
+Codes = Airports[14]
+#Putting new locational points to the Austin air data frame.
+AirCodes = cbind(Latitude,Longitude,Codes)
+Departure = ABIA[ABIA$Origin == 'AUS',]
+Arrival = ABIA[ABIA$Origin != 'AUS',]
+fullArrival = merge(Arrival,AirCodes,by.x = 'Origin',by.y = 'iata_code')
+fullDeparture = merge(Departure,AirCodes,by.x = 'Dest',by.y = 'iata_code')
+departureLatLong = cbind(fullDeparture$longitude_deg,fullArrival$latitude_deg)
+arrivalLatLong = cbind(fullArrival$longitude_deg,fullArrival$latitude_deg)
+#Using aggregate function to count observations that have a common origin point. I used year as the first parameter for a place holder because I knew there were no empty values and I was not sure how R would handle na observations.
+numberofArrivals = aggregate(fullArrival$Year, by = list(Origin = fullArrival$Origin), FUN = length)
+numberofDepartures = aggregate(fullDeparture$Year,by = list(Dest = fullDeparture$Dest),FUN = length)
+fullArrival = merge(fullArrival,numberofArrivals,by.x = 'Origin',by.y = 'Origin')
+fullDeparture = merge(fullDeparture,numberofDepartures,by.x = 'Dest',by.y = 'Dest')
+#Renaming newly created variable to Count
+names(fullArrival)[32]= 'Count'
+#Doing a similar process as above but to calculate the percentage of flights that were cancelled.
+fractionCancelled = aggregate(fullArrival$Cancelled,by = list(Origin = fullArrival$Origin),FUN = mean)
+fullArrival = merge(fullArrival,fractionCancelled,by.x = 'Origin',by.y = 'Origin')
+names(fullArrival)[33]= 'Fraction'
+# Setting up United States map for back drop.
+states = map_data('state')
+#Creating a gg plot with the desired title, backdrop, color and size.
+p = ggplot()+labs(title="Flights Arriving to Austin and Fraction of Cancellations")
+p = p+geom_polygon(data = states, aes(x=long,y=lat,group=group),colour = 'black',fill = 'white' )
+p = p + geom_jitter(data = fullArrival,aes(x = longitude_deg,y=latitude_deg,size = Count,col = Fraction)) +scale_color_viridis()
+  
+
+p
+```
+
+Above is a count of the origin locations of all the flights to Austin for the year 2021. As expected the most flights come from the Texas area. 
+
+
+```{r Weather cancelled, echo=FALSE,warning=FALSE}
+#Running a similar process to above. I chose max because that seemed to show the most interesting deviance in delay.
+
+AverageDelay = aggregate(fullArrival$WeatherDelay,by = list(Origin = fullArrival$Origin),na.rm = TRUE,FUN = max)
+fullArrivalw = merge(fullArrival,AverageDelay,by.x = 'Origin',by.y = 'Origin')
+names(fullArrivalw)[33]= 'MaxDelay'
+p3 = ggplot()+labs(title='Max Delay on Flights to Austin')
+p3 = p3+geom_polygon(data = states, aes(x=long,y=lat,group=group),colour = 'black',fill = 'white' )
+p3 = p3 + geom_jitter(data = fullArrivalw,aes(x = longitude_deg,y=latitude_deg,color = MaxDelay ))
+p3 = p3 + scale_color_viridis()
+p3
+
+```
+
+Above is the max delay for flights to Austin. It is interesting to note that Chicago had the largest delay.
+
+```{r scatters, echo=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+
+# Below I created plots that I thought were interesting. To do this I created several interacting plots and chose the ones that held important data.
+monthvsToAustin = aggregate(fullArrival$Year,by =list(Month = fullArrival$Month),FUN = length)
+plot(monthvsToAustin$Month,monthvsToAustin$x,xlab = 'Month',ylab = 'Flights to Austin',main = 'Flights to Austin vs Month of Year')
+
+
+plot(fullArrival$CarrierDelay,fullArrival$TaxiIn,xlab = 'Delay in Minutes',ylab = 'Taxi Time in Minutes',main = 'Delay vs Taxi Time')
+
+dayoWeekvsToAustin = aggregate(fullArrival$Year,by =list(Month = fullArrival$DayOfWeek),FUN = length)
+plot(dayoWeekvsToAustin$Month,dayoWeekvsToAustin$x,xlab = 'Day of Week',ylab = 'Flights to Austin',main = 'Flights to Austin vs  Day of Week')
+
+boxplot(fullDeparture$NASDelay,fullDeparture$CarrierDelay,fullDeparture$SecurityDelay,fullDeparture$LateAircraftDelay,outline = FALSE,names = c('NAS', 'Carrier','TSA', 'Plane'),xlab = 'Reason for Delay',ylab = 'Delay Time in Minutes',main = 'Reason for Delay vs Time of Delay')
+#To set up the next question I reset the frame.
+par(mfrow=c(1,1))
+```
+
+In the above plots we see lower flights to Austin in the months from September - December. We also see as delay increases, taxi time tends to decrease at a logarithmic rate. In the third plot we see that most days have the same amount of flights except for Saturday which is the value 6. In the last graph we see that the largest reason for delay comes from plane issues, followed by NAS which is delay due to weather adjusted for how the airport treats other weather issues.
+
+# Portfolio modeling
+
+We selected 6 REIT ETFs to create a prediction portfolio. Modeling for the next 20 days, finding different weights was the goal. We looked at weightings based off of the 5yr, 3yr, and 1 yr returns for the portfolio. The goal was to find which of these portfolio weight combos would beat the straightline weight of each ETF. Each ETF did well in its own right, and certain did better than others based on the time frame used. 
+
+
+## ETFs
+* ICF - iShares Cohen & Steers REIT ETF;
+
+* USRT - iShares Core U.S. REIT ETF;
+
+* VNQ - Vanguard Real Estate Index Fund ETF;
+
+* SCHH - Schwab U.S. REIT ETF;
+
+* IYR - iShares U.S. Real Estate ETF;
+
+* RWR - SPDR Dow Jones REIT ETF;
+
+```{r , echo = FALSE, warning=FALSE, include = FALSE}
+library('quantmod')
+# Import REIT ETFs
+mystocks = c("ICF", "USRT", "VNQ", "SCHH", "IYR", "RWR")
+getSymbols(mystocks, from = "2016-08-16")
+# loop into adjusted close
+for(ticker in mystocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+# use close on close returns and create a matrix
+all_returns = cbind(	ClCl(ICFa),
+                     ClCl(USRTa),
+                     ClCl(VNQa),
+                     ClCl(SCHHa),
+                     ClCl(IYRa),
+                     ClCl(RWRa))
+all_returns = as.matrix(na.omit(all_returns))
+```
+
+```{r , echo = FALSE, warning=FALSE}
+pairs(all_returns)
+### These are highly correlated due to the fact that they are all etfs in the same industry, Real Estate. 
+```
+
+This pairwise plot demonstrates the relationships between each ETF. Clearly, they are all positively correlated. This is due to the ETFs being contained within the same industry, real estate. Real estate is a great way to hedge against inflation and diversify your overall portfolio; however it would be highly unusual for real estate to make up the entirety of your investments. 
+
+Total wealth after 20 days in all 6 ETFs, equally weighted.
+```{r , echo = FALSE, warning = FALSE, include=FALSE,fig.align='center'}
+library(mosaic)
+library(quantmod)
+library(foreach)
+# bootstrap for daily returns to see a distribtion of returns
+set.seed(657)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+###########  ICF    USRT  VNQ   SCHH  IYR RWR
+my_weights = c(1/6, 1/6, 1/6, 1/6, 1/6, 1/6)
+#weight each ETF
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+# Compute your new total wealth
+total_wealth = sum(holdings)
+total_wealth
+initial_wealth = 100000
+# boostrap / resample 5000 times
+sim = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  ### Allocated by last year's return 
+  ###########  ICF  USRT VNQ  SCHH  IYR   RWR 
+  weights = c(1/6, 1/6, 1/6, 1/6, 1/6, 1/6)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+```{r, echo=FALSE, warning=FALSE, fig.align='center'}
+#find the center of the profit distribution
+#plot it with qplot
+# Profit/loss
+#mean(sim[,n_days])
+#mean(sim[,n_days] - initial_wealth)
+#hist(sim[,n_days]- initial_wealth, breaks=30, lab = "Profit", main = "Profit Distribution")
+qplot(sim[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1067.41,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+#95% confidence interval or St error times 2
+# 5% value at risk:
+#quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+This is the Profit plot of the evenly weighted holdings of all 6 ETF REITs. This method gave a mean of $1,067. And a range from -$8,535 to $10,669.
+
+
+## Portfolio 1
+### Weighted based on 1yr returns
+```{r , echo = FALSE, warning = FALSE, include =FALSE}
+### Portfolio 1
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  ### Allocated by last year's return 
+  ###########  ICF  USRT VNQ  SCHH  IYR   RWR 
+  weights = c(0.25, 0.1, 0.15, 0.1, 0.05, 0.35)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+Representing the possible range of total wealth after 20 days in the market. 
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# histogram of total wealth
+hist(sim1[,n_days], 25, xlab = "Total Wealth", main = "Wealth Distribution" )
+```
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# Profit/loss
+#mean(sim1[,n_days])
+#mean(sim1[,n_days] - initial_wealth)
+#hist(sim1[,n_days]- initial_wealth, breaks=30, lab = "Profit", main = "Profit Distribution")
+qplot(sim1[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1067.41,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+This model demonstrates the total possible profit of this portfolio after 20 days in the market. 
+profit will remain between -$8,886 and +$11,063 with 95% confidence with the mean at $1,089. 
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+
+
+## Portfolio 2
+### Weighted based on 5yr returns
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+##########################
+#### Portfolio 2
+##########################
+set.seed(1234)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Allocated by best 5 yr returns
+total_wealth = 100000
+###########  ICF  USRT VNQ  SCHH  IYR  RWR
+weights = c(0.25, 0.15, 0.25, 0.0, 0.35, 0.0)
+initial_wealth = 100000
+sim2 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+hist(sim2[,n_days], 25, xlab = " Total Wealth", main = "Wealth Distribution")
+```
+The total wealth in the portfolio 2 based off of weighting on the 5yr return. 
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+# Profit/loss
+#mean(sim2[,n_days])
+#mean(sim2[,n_days] - initial_wealth)
+#hist(sim2[,n_days]- initial_wealth, breaks=30,xlab = " Profit", main = "Profit Distribution")
+qplot(sim2[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1165.925,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+Profit range for portfolio 2 will remain between -$8,441 and +$10,773 with 95% confidence with a mean of $1,166.
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim2[,n_days]- initial_wealth, prob=0.05)
+```
+
+
+
+## Portfolio 3
+### Weighted based on 3yr returns
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+#########################
+#### Portfolio 3
+#########################
+set.seed(987)
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+### weighted by there 3 year
+###########  ICF  USRT  VNQ   SCHH  IYR RWR
+weights = c(0.2, 0.15, 0.2, 0.1, 0.2, 0.15)
+initial_wealth = 100000
+sim3 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+}
+```
+
+```{r , echo = FALSE, warning = FALSE,fig.align='center'}
+hist(sim3[,n_days], 25,xlabel = " Total Wealth", main = "Wealth Distribution")
+```
+Wealth from portfolio 3 based off of the 3yr return.
+```{r , echo = FALSE, warning = FALSE, fig.align='center'}
+# Profit/loss
+#mean(sim3[,n_days])
+#mean(sim3[,n_days] - initial_wealth)
+#hist(sim3[,n_days]- initial_wealth, breaks= 30,xlab = " Profit", main = "Profit Distribution")
+qplot(sim3[,n_days]- initial_wealth, geom = "histogram", binwidth = 2500, center = 1088.1,
+      xlab= "Profit", xlim = c(-25000, 25000),main = "Profit Distribution")
+```
+
+Profit will remain between -$8,374 and +$10,551 with 95% confidence with a mean of $1,088. 
+```{r , echo = FALSE, warning = FALSE, include = FALSE}
+# 5% value at risk:
+quantile(sim3[,n_days]- initial_wealth, prob=0.05)
+dev.off()
+```
+
+## Conclusion
+ 
+These three portfolios, weighted based on different years of returns, create different risk and reward deviations. Although they are similar, the weighting is varied for each ETF. ETFs are diversified in nature, therefore diversifying in ETFs should not make one's portfolio any safer.
+
+However, examining the 1 yr profit distribution we see a slight slant to the positive side. Perhaps indicating that certain investments have become popular as of late. This method beat the straighline weighting process; so did the 3yr and the 5yr.
+
+If one portfolio weight set had to be choosen then the 5yr return would have to be the winner. It shows consistent earnings over the long run and it has the highest mean ($1,166) for the distribution to center off of. The 5 yr matches both statistically and intuitively. This model also beat the mean of the straight line weighted model by about 10%.
+
+# Market segmentation
+
+In this problem, lets look at the social_marketing dataset, and try to discover any insights. 
+
+```{r imports, echo = FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r part1, echo = FALSE, include=FALSE}
+
+
+social_marketing =read.csv('data/social_marketing.csv')
+
+df <- social_marketing
+
+```
+
+First, lets create a "category" column, that will put each user into a category based on the max number of tweets they have in a particular category: 
+
+```{r part2, echo = FALSE, warning=FALSE}
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+#ggplot(counts, y = n, x = Category)
+
+
+# df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+
+```
+
+After doing this, we can see that the number one category, by a long shot, is chatter. This category is not really useful for understanding the market, as there are active users who could fall into many different spheres of twitter, so lets remove this category, and run the analysis again. 
+
+```{r part3, echo = FALSE, warning=FALSE}
+df <- social_marketing[,-2]
+
+df$Category = colnames(df)[apply(df,1,which.max)]
+
+by_category <- df %>% group_by(Category)
+counts = by_category %>% count() 
+
+
+#ggplot(counts, y = n, x = Category)
+
+
+# df %>% filter(Category == "health_nutrition") 
+counts = arrange(counts,desc(), by_group = n)
+
+counts
+
+```
+
+As we can see, health_nutrition, photo-sharing, and cooking are the to categories of these engaged users. This makes sense, as health_nutrition is a core value of VitaminWat... erm I mean NutrientH20's brand. One insight that NutrientH20 could take away is to start a photosharing campaign, that might engage their users who alraedy love to photo share. Another insight could be to advertise on the cooking channel, or target audiences in the cooking social-media verse. 
+
+
+
+# Author attribution
+```{r Author Attribution Imports, echo = FALSE, warning = FALSE, include=FALSE}
+library(tm)
+library(naivebayes)
+library(randomForest)
+```
+
+```{r Author Attribution, echo = FALSE, warning = FALSE}
+
+
+
+author_dirs_train = Sys.glob('data/ReutersC50/C50train/*')
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+
+
+author_dirs = author_dirs_train
+
+file_list = NULL
+labels = NULL
+for(author in author_dirs) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels = append(labels, rep(author_name, length(files_to_add)))
+}
+
+
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+file_list_test = NULL
+labels_test = NULL
+for(author in author_dirs_test) {
+	author_name_test = substring(author, first=29)
+	files_to_add_test = Sys.glob(paste0(author, '/*.txt'))
+	file_list_test = append(file_list, files_to_add)
+	labels_test = append(labels, rep(author_name, length(files_to_add)))
+}
+
+readerPlain = function(fname){
+    readPlain(elem=list(content=readLines(fname)), 
+	id=fname, language='en') }
+
+# Need a more clever regex to get better names here
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+
+# Preprocessing
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+DTM = DocumentTermMatrix(my_corpus)
+DTM = removeSparseTerms(DTM, 0.975)
+
+X_train = as.matrix(DTM)
+y_train = labels
+
+#####################################################
+
+all_docs_test = lapply(file_list_test, readerPlain) 
+names(all_docs_test) = file_list_test
+names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+
+my_corpus_test = Corpus(VectorSource(all_docs_test))
+
+# Preprocessing - Text Cleaning
+my_corpus_test = tm_map(my_corpus_test, content_transformer(tolower)) # make everything lowercase
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeNumbers)) # remove numbers
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removePunctuation)) # remove punctuation
+my_corpus_test = tm_map(my_corpus_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeWords), stopwords("SMART"))
+
+#Tokenization
+DTM_test = DocumentTermMatrix(my_corpus_test)
+DTM_test = removeSparseTerms(DTM_test, 0.975)
+
+
+X_test = as.matrix(DTM_test)
+y_test = labels_test
+
+
+#####################################################
+#classification metrics
+classifcation_report = function(actual, pred) {
+  
+    #confusion matrix
+    cm = table(pred, actual)
+    n = sum(cm)
+    nc = nrow(cm)
+    diag = diag(cm)
+    rowsums = apply(cm, 1, sum)
+    colsums = apply(cm, 2, sum)
+    p = rowsums / n
+    q = colsums / n 
+    
+    
+    accuracy = sum(diag) / n
+    precision = diag / colsums 
+    recall = diag / rowsums 
+    f = 2 * precision * recall / (precision + recall) 
+
+    cat(paste("Accuracy:\t", format(accuracy, digits=2), "\n",sep=" "))
+    cat(paste("Precision:\t", format(mean(precision, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("Recall:\t\t", format(mean(recall, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("F-measure:\t", format(mean(f,na.rm=TRUE), digits=2), "\n",sep=" "))
+}
+
+
+
+############# Naive Bayes #############
+cat("Number of unique training words: ", length(colnames(DTM)))
+cat("Number of unique testing words: ", length(colnames(DTM_test)))
+print("Different words between training and testing set:")
+setdiff(colnames(DTM), colnames(DTM_test))
+cat("Number of different words between training and testing set: ", length(setdiff(colnames(DTM), colnames(DTM_test))))
+
+print("Without Laplace Smoothing - Naive Bayes Results:")
+model <- naive_bayes(X_train, as.character(y_train), laplace=0) 
+pred <- predict(model, X_test)
+classifcation_report(y_test, pred)
+
+print("With Laplace Smoothing - Naive Bayes Results:")
+model <- naive_bayes(X_train, as.character(y_train), laplace=1) 
+pred <- predict(model, X_test)
+classifcation_report(y_test, pred)
+
+
+############# Random Forests #############
+col_inter = intersect(colnames(DTM), colnames(DTM_test))
+DTM_inter<- DTM[ ,which((colnames(DTM) %in% col_inter)==TRUE)]
+
+tfidf = weightTfIdf(DTM_inter)
+
+X_train = as.matrix(tfidf)
+scrub_cols = which(colSums(X_train) == 0)
+X_train = X_train[,-scrub_cols]
+
+pca = prcomp(X_train, scale=TRUE)
+
+#200 = .5 and 1000
+print("PCA Plot:")
+plot(cumsum(pca$sdev^2 / sum(pca$sdev^2)), type="b", xlab="Number of Features", ylab="Cumulative Proportion")
+
+print("Random Forest Results:")
+rf_model = randomForest(X_train[, 1:1000],factor(y_train), ntree=500)
+pred <- predict(rf_model, X_test)
+classifcation_report(y_test, pred)
+
+```
+
+
+In order to predict the authorship, we would have to build a model. For this problem, we decided that we can build 2 different models: Naive Bayes and Random Forests. The data is provided by text files, located on the path: data/ReutersC50. In this folder, there is a train set (C50train) and a test set (C50test). Before reading in text, we would need to pull out needed data, such as the files that contain the text to add to the corpus and the author who's text is in the file. When iterating through the list of files, we save the file name and the author, or the label, would be the directory that we are searching through replicated for the number of text files that author has. Once we do this for both the train and test set, we can then use readerPlain, to read in the text of the files in english. This complied list of text can we converted into a simple corpus. The words in the corpus are not standardized and they are not clean, therefore, we needed to conduct some text preprocessing. To clean the text, we converted all text to lower case, removed numbers, removed punctuation, removed excess white space, and got rid of stopwords using the SMART set. This text is now ready to be tokenized. To tokenized, we used a Document Term Matrix. This matrix would list out all documents along the rows and unique words in the corpus along the columns with the values in the matrix being the count of that unique word appearing in that a certain document. We also needed to get rid of rare cases so we removed a certain level of sparse terms (.975, .95) as well. Our training text is now ready. As for our training labels, they do not to be changed or cleaned; they can be used in the model as is. We conduct the exact same progress for our test data
+as well.
+
+Our first model is Naive Bayes. With Naive Bayes, we got an accuracy of 39% which is better than the baseline accuracy of random selection of 1/50 or 2%. This model is good start to our goal of predicting. We wanted to improved our Naive Bayes model. After following the calculations behind Naive Bayes, we saw that unknown test terms that are not seen in the train set have the potential of lowering our accuracy. We then looked into how to handle these unknown values. One thought was to add an UNK (unknown) token to the tokenizer to default all unknown words to a constant (or even a guessing function depending on the context of unknown words as seen in Word2Vec/Fasttext word embeddings based on potential word roots/similarities), similar to how an UNK token can be added to a BERT transformer tokenizer. However, that would probably result in handling many corner cases within the Document Term Matrix. We then explored other options such as Laplace Smoothing. Laplace smoothing will add one (or other constant) to the number of instances a word appears and add one (or other constant) times the number of instances a word appears to the number of total words. After applying Laplace (with many constants), we did not see any difference. This could be because of larger dimensional of the data or that there are not many unknown words in the test set. This lead us to explore the data more. We compared the unique words in each set; there are only 13 differing words between the train and test set. Therefore, unknown words do not cause much of a change as they are less than 1% of all words and therefore can be ignored in the context of this problem. To improve our predictions, we looked towards other models.
+
+Our second model is Random Forests with PCA. To run Random Forests, we had to conduct some additional formatting and preprocessing. As discovered in the Naive Bayes model, there are some unknown words in the data. These unknown words are also unknown features between 
+the test and train set. Random Forests needs to be aware of all features in order to generate predictions. To do, we got the intersect, or common words, between train and test set vocabularies. We kept only these similar words for our training matrix and started to conduct PCA.
+For PCA, we would have to get the tf-idf values and run it through PCA. Looking at the PCA plot of the number of features and the Cumulative Variance, we can see many interesting points. At around 200 features, around 50% of the features explain the variance and at around 1000 features, around 100% of the variance is explained. We do not need to run 1400 features, if around 1000 features will also yield similar results. Therefore, we can train with only the first 1000 features. Looking at the results, we see that, without leaking the training dataset, the model is giving 98% correct accuracy. As for the other values, because the data set has balanced classes, there is no need to interpret them in this context however they are also equal to 98%. This is probably a better model probably because Random Forests has the ability to define
+sets of similar words under a branch and, therefore, can isolate authors much better. 
+
+It is also interesting to note that when running sparse terms of .95, the naive bayes model accuracy increased and when using 500 features for PCA on random forests, the random forest accuracy decreased slightly. This is seen below with the first image being the Naive Bayes results, second image being the PCA plot, and third image being the Random Forests results.
+
+
+```{r Author Attribution .95, echo = FALSE, eval=FALSE,  warning = FALSE}
+library(tm)
+library(naivebayes)
+library(randomForest)
+
+
+author_dirs_train = Sys.glob('data/ReutersC50/C50train/*')
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+
+
+author_dirs = author_dirs_train
+
+file_list = NULL
+labels = NULL
+for(author in author_dirs) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels = append(labels, rep(author_name, length(files_to_add)))
+}
+
+
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+file_list_test = NULL
+labels_test = NULL
+for(author in author_dirs_test) {
+	author_name_test = substring(author, first=29)
+	files_to_add_test = Sys.glob(paste0(author, '/*.txt'))
+	file_list_test = append(file_list, files_to_add)
+	labels_test = append(labels, rep(author_name, length(files_to_add)))
+}
+
+readerPlain = function(fname){
+    readPlain(elem=list(content=readLines(fname)), 
+	id=fname, language='en') }
+
+# Need a more clever regex to get better names here
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+
+# Preprocessing
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+DTM = DocumentTermMatrix(my_corpus)
+DTM = removeSparseTerms(DTM, 0.95)
+
+X_train = as.matrix(DTM)
+y_train = labels
+
+#####################################################
+
+all_docs_test = lapply(file_list_test, readerPlain) 
+names(all_docs_test) = file_list_test
+names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+
+my_corpus_test = Corpus(VectorSource(all_docs_test))
+
+# Preprocessing - Text Cleaning
+my_corpus_test = tm_map(my_corpus_test, content_transformer(tolower)) # make everything lowercase
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeNumbers)) # remove numbers
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removePunctuation)) # remove punctuation
+my_corpus_test = tm_map(my_corpus_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeWords), stopwords("SMART"))
+
+#Tokenization
+DTM_test = DocumentTermMatrix(my_corpus_test)
+DTM_test = removeSparseTerms(DTM_test, 0.95)
+
+
+X_test = as.matrix(DTM_test)
+y_test = labels_test
+
+
+#####################################################
+#classification metrics
+classifcation_report = function(actual, pred) {
+  
+    #confusion matrix
+    cm = table(pred, actual)
+    n = sum(cm)
+    nc = nrow(cm)
+    diag = diag(cm)
+    rowsums = apply(cm, 1, sum)
+    colsums = apply(cm, 2, sum)
+    p = rowsums / n
+    q = colsums / n 
+    
+    
+    accuracy = sum(diag) / n
+    precision = diag / colsums 
+    recall = diag / rowsums 
+    f = 2 * precision * recall / (precision + recall) 
+
+    cat(paste("Accuracy:\t", format(accuracy, digits=2), "\n",sep=" "))
+    cat(paste("Precision:\t", format(mean(precision, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("Recall:\t\t", format(mean(recall, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("F-measure:\t", format(mean(f,na.rm=TRUE), digits=2), "\n",sep=" "))
+}
+
+
+
+############# Naive Bayes #############
+cat("Number of unique training words: ", length(colnames(DTM)))
+cat("Number of unique testing words: ", length(colnames(DTM_test)))
+print("Different words between training and testing set:")
+setdiff(colnames(DTM), colnames(DTM_test))
+cat("Number of different words between training and testing set: ", length(setdiff(colnames(DTM), colnames(DTM_test))))
+
+
+model <- naive_bayes(X_train, as.character(y_train), laplace=1) 
+pred <- predict(model, X_test)
+print("Naive Bayes Results:")
+classifcation_report(y_test, pred)
+
+
+############# Random Forests #############
+col_inter = intersect(colnames(DTM), colnames(DTM_test))
+DTM_inter<- DTM[ ,which((colnames(DTM) %in% col_inter)==TRUE)]
+
+tfidf = weightTfIdf(DTM_inter)
+
+X_train = as.matrix(tfidf)
+scrub_cols = which(colSums(X_train) == 0)
+X_train = X_train[,-scrub_cols]
+
+pca = prcomp(X_train, scale=TRUE)
+
+#200 = .5 and 1000
+print("PCA Plot:")
+plot(cumsum(pca$sdev^2 / sum(pca$sdev^2)), type="b", xlab="Number of Features", ylab="Cumulative Proportion")
+
+rf_model = randomForest(X_train[, 1:500],factor(y_train), ntree=500)
+pred <- predict(rf_model, X_test)
+
+print("Random Forests Results:")
+classifcation_report(y_test, pred)
+
+```
+
+Naive Bayes Results:
+
+```{r fig.width=100, fig.height=100,echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("images/nbResults.PNG")
+grid.raster(img)
+```
+
+PCA Plot: 
+
+```{r fig.width=100, fig.height=100,echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("images/95Plot.PNG")
+grid.raster(img)
+```
+
+Random Forests Results:
+
+```{r fig.width=100, fig.height=100,echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("images/rfResults.PNG")
+grid.raster(img)
+```
+
+# Association rule mining
+
+```{r Association Rule Mining Imports, echo = FALSE, include=FALSE}
+library(tidyverse)
+library(arules)  # has a big ecosystem of packages built around it
+library(arulesViz)
+```
+
+```{r Association Rule Mining, echo = FALSE}
+
+df = read.csv("data/groceries.txt", header = FALSE)
+df = df[!(is.na(df$V2) | df$V2==""), ]
+df <-  df[!duplicated(df),]
+
+trans = c()
+items = c()
+
+for (row in 1:nrow(df)) {
+    for (item in df[row,]){
+        trans <- c(trans, row)
+        items <- c(items, item)
+        
+    }
+}
+
+x <- data.frame("Transaction" = trans, "Item" = items)
+cleaned  = x[!(is.na(x$Item) | x$Item==""),]
+
+cleaned$Transaction = factor(cleaned$Transaction)
+
+cleaned_list = split(x=cleaned$Item, f=cleaned$Transaction)
+cleaned_list = lapply(cleaned_list, unique)
+baskets = as(cleaned_list, "transactions")
+#summary(baskets)
+
+rules = apriori(baskets, parameter=list(support=.001, confidence=.1))
+
+print("High Support")
+inspect(subset(rules, subset=support > .1))
+print("High Lift")
+inspect(subset(rules, subset=lift > 5))
+print("High Confidence")
+inspect(subset(rules, subset=confidence > 0.35))
+print("Low Support, High Confidence")
+inspect(subset(rules, subset=support < .05 & confidence > 0.4))
+
+
+
+
+
+```
+
+In order to get interesting insights into the association rule mining, we needed to format the data properly. First, an association can only be made if there are at least 2 items. In the dataset provided, items are listed from column 1 to column 4. The number of items bought correlates to the number of columns filled in from left to right. Therefore, if a transaction has a missing items in column 2, then they are also missing items in column 3 and 4. If that is the case, then the only filled in column is column 1 which means that the transaction only has one item and needs to be removed from the data set. To do this, we locate all rows that have the column 2 empty and remove them.
+
+Next, in order to replicate our dataset similar to the one done in class, we had to perform a table pivot on rows. We wanted the data frame to contain each item on its own row along with the row number which would represent the transaction number. 
+This means that there will be many of the same row number value in the transaction column. We also wanted to remove all rows that do not have an item associated with it because of the pivot.
+
+Then, we factorize the transactions and create a list based on the transaction number and the items that were bought in the transaction in order to format the data to be converted to an arules type.
+
+When converting to arules and running the apriori algorithm (with a support of .001 and confidence of .1) on it, we can then see some interesting insights:
+
+* The most stable groceries that are bought independently (highest support) are soda, yogurt, rolls/buns, other vegetables, and whole milk. The highest support is .1879791 with whole milk. This makes sense as milk is usually the most brought item at the markets.
+
+* When looking at the associations that have the most lift, we see that the highest lift value is a 13.490072 is at softener -> detergent. This makes sense as these are both laundry items. Other rules are strongly related to items to each other such as popcorn and salty snack (salty snacks), liquor and bottled beer (alcohol), and flour and sugar (baking). Out of this set, the only association that has 2 items on the left side and one on the right is {grapes, pip fruit} -> tropical fruit. 
+
+* When looking at the associations that have the most confidence or conditional probability between items, we see that the highest confidence is .5 with {dessert,root vegetables} -> other vegetables. This could be warranted by the fact that people buy both dessert and vegetables in order to counteract their unhealthy diet choices.
+
+* When looking at the associations that have high confidence and low support, we see that dessert,root vegetables -> other vegetables is seen again. This set shows associations of items that were rarely bought but, when bought, they were usually bought together.

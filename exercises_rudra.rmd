@@ -1,0 +1,487 @@
+---
+title: "Exercises"
+author: "Jacob Pammer, Chandler Wann, Narain Mandyam, Rudraksh Garg"
+date: "8/1/2021"
+output: pdf_document
+---
+
+```{r Problem 1, echo=FALSE, include = FALSE}
+
+df = read.csv(file = "data/greenbuildings.csv")
+
+table(df$green_rating)
+hist(df$leasing_rate)
+
+df = df[df$leasing_rate > 10,]
+hist(df$leasing_rate)
+
+Monthly_Revenue = (df$Rent * df$size * (df$leasing_rate/100))
+df$Monthly_Revenue_in_Mil = Monthly_Revenue/1000000
+
+drops <- c("LEED","Energystar")
+df = df[ , !(names(df) %in% drops)]
+
+df$Rent_Diff = df$Rent - df$cluster_rent
+
+
+df_green = df[df$green_rating == 1,]
+df_nongreen = df[df$green_rating == 0,]
+
+median(df_green$Rent)
+median(df_nongreen$Rent)
+
+median(df_green$Rent) - median(df_nongreen$Rent)
+
+IQR(df_green$Rent)
+IQR(df_nongreen$Rent)
+
+par(mfrow=c(1,2))
+
+d0 <- seq(0, 200, by=10)
+d1 <- seq(0, 200, by=10)
+lmts <- range(d0,d1)
+
+
+
+boxplot(df_green$Rent, col='green', ylim= lmts)
+
+boxplot(df_nongreen$Rent, ylim=lmts)
+
+
+
+wilcox.test(df_green$Rent, y = df_nongreen$Rent, alternative = c("greater"))
+
+
+
+
+
+```
+
+
+ANSWER HERE::
+Do we aggree with conclusions?
+Certain portions of the analysis were done correctly, such as the use of medians is a good idea to avoid outliers.
+Additionally, the according to the wilcoxon test we found that the medians of green vs non-green buildings were statistically different. So,
+the green buildings could potentially be a strong indicator for rent price in the aggregate.
+However, the analyst did not account for certain cities being more green then others. Certain clusters will have higher rents regaurdless of green. Therefore,
+failing to take this into account could be undercutting your additionaly revenue. On top of that, in your payback period the analyst failed to consider the time value of money. 
+Instead of creating a straight line payback, the analyst should use a discounted payback period or NPV. This would determine the payoff period and addional cashflows more accurately. 
+It would be nice for comparison purposes if the clusters were correlated to certain cities. 
+(bar plot could comparing npv vs non npv adjustment)
+Then find a good scatter plot comparing stuff and discuss this as confounding
+Even though there are many flaws in this study, choosing a green building could be a viable option, but further
+analysis that address our confounding variables would be needed to be sure.
+
+
+
+
+
+# Author attribution
+```{r Author Attribution Imports, echo = FALSE, warning = FALSE, include=FALSE}
+library(tm)
+library(naivebayes)
+library(randomForest)
+```
+
+```{r Author Attribution, echo = FALSE, warning = FALSE, eval=FALSE}
+
+
+
+author_dirs_train = Sys.glob('data/ReutersC50/C50train/*')
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+
+
+author_dirs = author_dirs_train
+
+file_list = NULL
+labels = NULL
+for(author in author_dirs) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels = append(labels, rep(author_name, length(files_to_add)))
+}
+
+
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+file_list_test = NULL
+labels_test = NULL
+for(author in author_dirs_test) {
+	author_name_test = substring(author, first=29)
+	files_to_add_test = Sys.glob(paste0(author, '/*.txt'))
+	file_list_test = append(file_list, files_to_add)
+	labels_test = append(labels, rep(author_name, length(files_to_add)))
+}
+
+readerPlain = function(fname){
+    readPlain(elem=list(content=readLines(fname)), 
+	id=fname, language='en') }
+
+# Need a more clever regex to get better names here
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+
+# Preprocessing
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+DTM = DocumentTermMatrix(my_corpus)
+DTM = removeSparseTerms(DTM, 0.975)
+
+X_train = as.matrix(DTM)
+y_train = labels
+
+#####################################################
+
+all_docs_test = lapply(file_list_test, readerPlain) 
+names(all_docs_test) = file_list_test
+names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+
+my_corpus_test = Corpus(VectorSource(all_docs_test))
+
+# Preprocessing - Text Cleaning
+my_corpus_test = tm_map(my_corpus_test, content_transformer(tolower)) # make everything lowercase
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeNumbers)) # remove numbers
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removePunctuation)) # remove punctuation
+my_corpus_test = tm_map(my_corpus_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeWords), stopwords("SMART"))
+
+#Tokenization
+DTM_test = DocumentTermMatrix(my_corpus_test)
+DTM_test = removeSparseTerms(DTM_test, 0.975)
+
+
+X_test = as.matrix(DTM_test)
+y_test = labels_test
+
+
+#####################################################
+#classification metrics
+classifcation_report = function(actual, pred) {
+  
+    #confusion matrix
+    cm = table(pred, actual)
+    n = sum(cm)
+    nc = nrow(cm)
+    diag = diag(cm)
+    rowsums = apply(cm, 1, sum)
+    colsums = apply(cm, 2, sum)
+    p = rowsums / n
+    q = colsums / n 
+    
+    
+    accuracy = sum(diag) / n
+    precision = diag / colsums 
+    recall = diag / rowsums 
+    f = 2 * precision * recall / (precision + recall) 
+
+    cat(paste("Accuracy:\t", format(accuracy, digits=2), "\n",sep=" "))
+    cat(paste("Precision:\t", format(mean(precision, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("Recall:\t\t", format(mean(recall, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("F-measure:\t", format(mean(f,na.rm=TRUE), digits=2), "\n",sep=" "))
+}
+
+
+
+############# Naive Bayes #############
+cat("Number of unique training words: ", length(colnames(DTM)))
+cat("Number of unique testing words: ", length(colnames(DTM_test)))
+print("Different words between training and testing set:")
+setdiff(colnames(DTM), colnames(DTM_test))
+cat("Number of different words between training and testing set: ", length(setdiff(colnames(DTM), colnames(DTM_test))))
+
+print("Without Laplace Smoothing - Naive Bayes Results:")
+model <- naive_bayes(X_train, as.character(y_train), laplace=0) 
+pred <- predict(model, X_test)
+classifcation_report(y_test, pred)
+
+print("With Laplace Smoothing - Naive Bayes Results:")
+model <- naive_bayes(X_train, as.character(y_train), laplace=1) 
+pred <- predict(model, X_test)
+classifcation_report(y_test, pred)
+
+
+############# Random Forests #############
+col_inter = intersect(colnames(DTM), colnames(DTM_test))
+DTM_inter<- DTM[ ,which((colnames(DTM) %in% col_inter)==TRUE)]
+
+tfidf = weightTfIdf(DTM_inter)
+
+X_train = as.matrix(tfidf)
+scrub_cols = which(colSums(X_train) == 0)
+X_train = X_train[,-scrub_cols]
+
+pca = prcomp(X_train, scale=TRUE)
+
+#200 = .5 and 1000
+print("PCA Plot:")
+plot(cumsum(pca$sdev^2 / sum(pca$sdev^2)), type="b", xlab="Number of Features", ylab="Cumulative Proportion")
+
+print("Random Forest Results:")
+rf_model = randomForest(X_train[, 1:1000],factor(y_train), ntree=500)
+pred <- predict(rf_model, X_test)
+classifcation_report(y_test, pred)
+
+```
+
+
+In order to predict the authorship, we would have to build a model. For this problem, we decided that we can build 2 different models: Naive Bayes and Random Forests. The data is provided by text files, located on the path: data/ReutersC50. In this folder, there is a train set (C50train) and a test set (C50test). Before reading in text, we would need to pull out needed data, such as the files that contain the text to add to the corpus and the author who's text is in the file. Once When iterating through the list of files, we save the file name and the author, or the label, would be the directory that we are searching through replicated for the number of text files that author has. Once we do this for both the train and test set, we can then use readerPlain, to read in the text of the files in english. This complied list of text can we converted into a simple corpus. The words in the corpus are not standardized and they are not clean, therefore, we needed to conduct some text preprocessing. To clean the text, we converted all text to lower case, removed numbers, removed punctuation, removed excess white space, and got rid of stopwords using the SMART set. This text is now ready to be tokenized. To tokenized, we used a Document Term Matrix. This matrix would list out all documents along the rows and unique words in the corpus along the columns with the values in the matrix being the count of that unique word appearing in that a certain document. We also needed to get rid of rare cases so we removed a certain level of sprare terms (.975, .95) as well. Our training text is now ready. As for our training labels, they do not to be changed or cleaned; they can be used in the model as is. We conduct the exact same progress for our test data
+as well.
+
+Our first model is Naive Bayes. With Naive Bayes, we got an accuracy of 39% which is better than the baseline accuracy of random selection of 1/50 or 2%. This model is good start to our goal of predicting. We wanted to improved our Naive Bayes model. After following the calculations behind Naive Bayes, we saw that unknown test terms that are not seen in the train set have the potiental of lowering our accuracy. We then looked into how to handle these unknown values. One thought was to add an UNK (unknown) token to the tokenizer to default all unknown words to a constant (or even a guessing function depending on the context of unknown words as seen in Word2Vec/Fasttext word embeddings based on potential word roots/similarities), similar to how an UNK token can be added to a BERT transformer tokenizer. However, that would probably result in handling many corner cases within the Document Term Matrix. We then explored other options such as Laplace Smoothing. Laplace smoothing will add one (or other constant) to the number of instances a word appears and add one (or other constant) times the number of instances a word appears to the number of total words. After applying Laplace (with many constants), we did not see any difference. This could be because of larger dimensional of the data or that there are not many unknown words in the test set. This lead us to explore the data more. We compared the unique words in each set; there are only 13 differing words between the train and test set. Therefore, unknown words do not cause much of a change as they are less than 1% of all words and therefore can be ignored in the context of this problem. To improve our predictions, we looked towards other models.
+
+Our second model is Random Forests with PCA. To run Random Forests, we had to conduct some additional formatting and preprocessing. As discovered in the Naive Bayes model, there are some unknown words in the data. These unknown words are also unknown features between 
+the test and train set. Random Forests needs to be aware of all features in order to generate predictions. To do, we got the intersect, or common words, between train and test set vocabularies. We kept only these similar words for our training matrix and started to conduct PCA.
+For PCA, we would have to get the tfidf values and run it through PCA. Looking at the PCA plot of the number of features and the Cumulative Variance, we can see many interesting points. At around 200 features, around 50% of the features explain the variance and at around 1000 features, around 100% of the variance is explained. We do not need to run 1400 features, if around 1000 features will also yield similar results. Therefore, we can train with only the first 1000 features. Looking at the results, we see that, without leaking the dataset, the model is giving 98% correct accuracy. As for the other values, because the data set has balanced classes, there is no need to interpret them in this context however they are also equal to 98%. This is probably a better model probably because Random Forests has the ability to define
+sets of similar words under a branch and, therefore, can isolate authors much better. 
+
+It is also interesting to note that when running sparce terms of .95, the naive bayes model accuracy increased and when using 500 features for PCA on random forests, the random forest accuracy decreased slightly. This is seen below with the first image being the Naive Bayes results, second image being the PCA plot, and third image being the Random Forests results.
+
+
+```{r Author Attribution .95, echo = FALSE, eval=FALSE,  warning = FALSE}
+library(tm)
+library(naivebayes)
+library(randomForest)
+
+
+author_dirs_train = Sys.glob('data/ReutersC50/C50train/*')
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+
+
+author_dirs = author_dirs_train
+
+file_list = NULL
+labels = NULL
+for(author in author_dirs) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels = append(labels, rep(author_name, length(files_to_add)))
+}
+
+
+author_dirs_test = Sys.glob('data/ReutersC50/C50test/*')
+file_list_test = NULL
+labels_test = NULL
+for(author in author_dirs_test) {
+	author_name_test = substring(author, first=29)
+	files_to_add_test = Sys.glob(paste0(author, '/*.txt'))
+	file_list_test = append(file_list, files_to_add)
+	labels_test = append(labels, rep(author_name, length(files_to_add)))
+}
+
+readerPlain = function(fname){
+    readPlain(elem=list(content=readLines(fname)), 
+	id=fname, language='en') }
+
+# Need a more clever regex to get better names here
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+
+# Preprocessing
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+DTM = DocumentTermMatrix(my_corpus)
+DTM = removeSparseTerms(DTM, 0.95)
+
+X_train = as.matrix(DTM)
+y_train = labels
+
+#####################################################
+
+all_docs_test = lapply(file_list_test, readerPlain) 
+names(all_docs_test) = file_list_test
+names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+
+my_corpus_test = Corpus(VectorSource(all_docs_test))
+
+# Preprocessing - Text Cleaning
+my_corpus_test = tm_map(my_corpus_test, content_transformer(tolower)) # make everything lowercase
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeNumbers)) # remove numbers
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removePunctuation)) # remove punctuation
+my_corpus_test = tm_map(my_corpus_test, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus_test = tm_map(my_corpus_test, content_transformer(removeWords), stopwords("SMART"))
+
+#Tokenization
+DTM_test = DocumentTermMatrix(my_corpus_test)
+DTM_test = removeSparseTerms(DTM_test, 0.95)
+
+
+X_test = as.matrix(DTM_test)
+y_test = labels_test
+
+
+#####################################################
+#classification metrics
+classifcation_report = function(actual, pred) {
+  
+    #confusion matrix
+    cm = table(pred, actual)
+    n = sum(cm)
+    nc = nrow(cm)
+    diag = diag(cm)
+    rowsums = apply(cm, 1, sum)
+    colsums = apply(cm, 2, sum)
+    p = rowsums / n
+    q = colsums / n 
+    
+    
+    accuracy = sum(diag) / n
+    precision = diag / colsums 
+    recall = diag / rowsums 
+    f = 2 * precision * recall / (precision + recall) 
+
+    cat(paste("Accuracy:\t", format(accuracy, digits=2), "\n",sep=" "))
+    cat(paste("Precision:\t", format(mean(precision, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("Recall:\t\t", format(mean(recall, na.rm=TRUE), digits=2), "\n",sep=" "))
+    cat(paste("F-measure:\t", format(mean(f,na.rm=TRUE), digits=2), "\n",sep=" "))
+}
+
+
+
+############# Naive Bayes #############
+cat("Number of unique training words: ", length(colnames(DTM)))
+cat("Number of unique testing words: ", length(colnames(DTM_test)))
+print("Different words between training and testing set:")
+setdiff(colnames(DTM), colnames(DTM_test))
+cat("Number of different words between training and testing set: ", length(setdiff(colnames(DTM), colnames(DTM_test))))
+
+
+model <- naive_bayes(X_train, as.character(y_train), laplace=1) 
+pred <- predict(model, X_test)
+print("Naive Bayes Results:")
+classifcation_report(y_test, pred)
+
+
+############# Random Forests #############
+col_inter = intersect(colnames(DTM), colnames(DTM_test))
+DTM_inter<- DTM[ ,which((colnames(DTM) %in% col_inter)==TRUE)]
+
+tfidf = weightTfIdf(DTM_inter)
+
+X_train = as.matrix(tfidf)
+scrub_cols = which(colSums(X_train) == 0)
+X_train = X_train[,-scrub_cols]
+
+pca = prcomp(X_train, scale=TRUE)
+
+#200 = .5 and 1000
+print("PCA Plot:")
+plot(cumsum(pca$sdev^2 / sum(pca$sdev^2)), type="b", xlab="Number of Features", ylab="Cumulative Proportion")
+
+rf_model = randomForest(X_train[, 1:500],factor(y_train), ntree=500)
+pred <- predict(rf_model, X_test)
+
+print("Random Forests Results:")
+classifcation_report(y_test, pred)
+
+```
+
+Naive Bayes Results:
+
+```{r fig.width=100, fig.height=100,echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("images/nbCM.PNG")
+grid.raster(img)
+```
+
+PCA Plot: 
+
+```{r fig.width=100, fig.height=100,echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("images/95Plot.PNG")
+grid.raster(img)
+```
+
+Random Forests Results:
+
+```{r fig.width=100, fig.height=100,echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("images/RFCM.PNG")
+grid.raster(img)
+```
+
+# Association rule mining
+
+```{r Association Rule Mining Imports, echo = FALSE, include=FALSE}
+library(tidyverse)
+library(arules)  # has a big ecosystem of packages built around it
+library(arulesViz)
+```
+
+```{r Association Rule Mining, echo = FALSE}
+
+df = read.csv("data/grocecies.txt", header = FALSE)
+df = df[!(is.na(df$V2) | df$V2==""), ]
+df <-  df[!duplicated(df),]
+
+trans = c()
+items = c()
+
+for (row in 1:nrow(df)) {
+    for (item in df[row,]){
+        trans <- c(trans, row)
+        items <- c(items, item)
+        
+    }
+}
+
+x <- data.frame("Transaction" = trans, "Item" = items)
+cleaned  = x[!(is.na(x$Item) | x$Item==""),]
+
+cleaned$Transaction = factor(cleaned$Transaction)
+
+cleaned_list = split(x=cleaned$Item, f=cleaned$Transaction)
+cleaned_list = lapply(cleaned_list, unique)
+baskets = as(cleaned_list, "transactions")
+#summary(baskets)
+
+rules = apriori(baskets, parameter=list(support=.001, confidence=.1))
+
+print("High Support")
+inspect(subset(rules, subset=support > .1))
+print("High Lift")
+inspect(subset(rules, subset=lift > 5))
+print("High Confidence")
+inspect(subset(rules, subset=confidence > 0.35))
+print("Low Support, High Confidence")
+inspect(subset(rules, subset=support < .05 & confidence > 0.4))
+
+
+
+
+
+```
+
+In order to get interesting insights into the association rule mining, we needed to format the data properly. First, an association can only be made if there are at least 2 items. In the dataset provided, items are listed from column 1 to column 4. The number of items bought correlates to the number of columns filled in from left to right. Therefore, if a transaction has a missing items in column 2, then they are also missing items in column 3 and 4. If that is the case, then the only filled in column is column 1 which means that the transaction only has one items and needs to be removed from the data set. To do this, we locate all rows that have the column 2 empty and remove them.
+
+Next, in order to replicate our dataset similar to the one done in class, we had to perform a table pivot on rows. We wanted the data frame to contain each item on its own row along with the row number which would represent the transaction number. 
+This means that there will be many of the same row number value in the transaction column. We also wanted to remove all rows that do not have an item associated with it because of the pivot.
+
+Then, we factorize the transactions and create a listed based on the transaction number and the items that were bought in the transaction in order to format the data to be converted to an arules type.
+
+When converting to arules and running the apriori algorithm (with a support of .001 and confidence of .1) on it, we can then see some interesting insights:
+
+* The most stable groceries that are bought independently (highest support) are soda, yogurt, rolls/buns, other vegetables, and whole milk. The highest support is .1879791 with whole milk. This makes sense as milk is usually the most brought item at the markets.
+
+* When looking at the associations that have the most lift, we see that the highest lift value is a 13.490072 is at softener -> detergent. This makes sense as these are both laundry items. Other rules are strongly related to items to each other such as popcorn and salty snack (salty snacks), liquor and bottled beer (alcohol), and flour and sugar (baking). Out of this set, the only associations that has 2 items on the left side and one on the right is grapes, pip fruit -> tropical fruit. 
+
+* When looking at the associations that have the most confidence or conditional probability between items, we see that the highest confidence is .5 is at dessert,root vegetables -> other vegetables. This could be warranted by the fact that people buy both dessert and vegetables in order to counteract their unhealthy diet choices.
+
+* When looking at the associations that have high confidence and low support, we see that dessert,root vegetables -> other vegetables is seen again. This set shows associations of items that were rarely bought but, when bought, they were usually bought together.
